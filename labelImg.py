@@ -7,6 +7,7 @@ import platform
 import re
 import sys
 import subprocess
+import cv2
 
 from functools import partial
 from collections import defaultdict
@@ -47,6 +48,9 @@ from libs.ustr import ustr
 from libs.hashableQListWidgetItem import HashableQListWidgetItem
 
 __appname__ = 'labelImg'
+tracker_types = ['BOOSTING', 'MIL', 'KCF', 'TLD',
+                'MEDIANFLOW', 'GOTURN', 'MOSSE', 'CSRT']
+
 
 class WindowMixin(object):
 
@@ -93,6 +97,11 @@ class MainWindow(QMainWindow, WindowMixin):
         self.dirname = None
         self.labelHist = []
         self.lastOpenDir = None
+
+
+        self.tracker = cv2.TrackerBoosting_create()
+
+        self.tracker_state = 'uninit'
 
         # Whether we need to save or not.
         self.dirty = False
@@ -218,6 +227,10 @@ class MainWindow(QMainWindow, WindowMixin):
 
         openNextImg = action(getStr('nextImg'), self.openNextImg,
                              'd', 'next', getStr('nextImgDetail'))
+
+        
+        trackNextImg = action("Track Next Image", self.trackNextImg,
+                             't', 'track', "Track Next Frame")
 
         openPrevImg = action(getStr('prevImg'), self.openPrevImg,
                              'a', 'prev', getStr('prevImgDetail'))
@@ -398,11 +411,11 @@ class MainWindow(QMainWindow, WindowMixin):
 
         self.tools = self.toolbar('Tools')
         self.actions.beginner = (
-            open, opendir, changeSavedir, openNextImg, openPrevImg, verify, save, save_format, None, create, copy, delete, None,
+            open, opendir, changeSavedir, openNextImg, trackNextImg, openPrevImg, verify, save, save_format, None, create, copy, delete, None,
             zoomIn, zoom, zoomOut, fitWindow, fitWidth)
 
         self.actions.advanced = (
-            open, opendir, changeSavedir, openNextImg, openPrevImg, save, save_format, None,
+            open, opendir, changeSavedir, openNextImg, trackNextImg, openPrevImg, save, save_format, None,
             createMode, editMode, None,
             hideAll, showAll)
 
@@ -574,14 +587,19 @@ class MainWindow(QMainWindow, WindowMixin):
     def status(self, message, delay=5000):
         self.statusBar().showMessage(message, delay)
 
-    def resetState(self):
+    def resetState(self, keepCanvas=False):
         self.itemsToShapes.clear()
         self.shapesToItems.clear()
         self.labelList.clear()
         self.filePath = None
         self.imageData = None
         self.labelFile = None
-        self.canvas.resetState()
+        
+        if(not keepCanvas):
+            self.canvas.resetState()
+        else:
+            self.canvas.update()
+
         self.labelCoordinates.clear()
         self.comboBox.cb.clear()
 
@@ -991,9 +1009,9 @@ class MainWindow(QMainWindow, WindowMixin):
         for item, shape in self.itemsToShapes.items():
             item.setCheckState(Qt.Checked if value else Qt.Unchecked)
 
-    def loadFile(self, filePath=None):
+    def loadFile(self, filePath=None, keepCanvas=False):
         """Load the specified file, or the last opened file if None."""
-        self.resetState()
+        self.resetState(keepCanvas=keepCanvas)
         self.canvas.setEnabled(False)
         if filePath is None:
             filePath = self.settings.get(SETTING_FILENAME)
@@ -1045,6 +1063,7 @@ class MainWindow(QMainWindow, WindowMixin):
                 return False
             self.status("Loaded %s" % os.path.basename(unicodeFilePath))
             self.image = image
+            self.cv_img = cv2.imread(unicodeFilePath)
             self.filePath = unicodeFilePath
             self.canvas.loadPixmap(QPixmap.fromImage(image))
             if self.labelFile:
@@ -1055,6 +1074,18 @@ class MainWindow(QMainWindow, WindowMixin):
             self.paintCanvas()
             self.addRecentFile(self.filePath)
             self.toggleActions(True)
+
+            ok = False
+
+            if (self.tracker_state == 'init'):
+                ok, bbox = self.tracker.update(self.cv_img)
+
+                if not ok:
+                    self.tracker_state = 'reinit'
+                    
+                else:
+                    self.tracker_bbox = bbox
+                    print(bbox)
 
             # Label xml file and show bound box according to its filename
             # if self.usingPascalVocFormat is True:
@@ -1281,7 +1312,7 @@ class MainWindow(QMainWindow, WindowMixin):
             if filename:
                 self.loadFile(filename)
 
-    def openNextImg(self, _value=False):
+    def openNextImg(self, _value=False, keepCanvas=False):
         # Proceding prev image without dialog if having any label
         if self.autoSaving.isChecked():
             if self.defaultSaveDir is not None:
@@ -1306,7 +1337,80 @@ class MainWindow(QMainWindow, WindowMixin):
                 filename = self.mImgList[currIndex + 1]
 
         if filename:
-            self.loadFile(filename)
+            self.loadFile(filename, keepCanvas)
+
+    def trackNextImg(self, _value=False):
+        # Proceding prev image without dialog if having any label
+
+        last_shapes = self.canvas.shapes
+        
+        if(self.tracker_state == 'reinit'):
+            del self.tracker
+            self.tracker = cv2.TrackerBoosting_create()
+            bbox = (self.canvas.selectedShape.points[0].x(),
+                    self.canvas.selectedShape.points[0].y(),
+                    self.canvas.selectedShape.points[1].x() - self.canvas.selectedShape.points[0].x(),
+                    self.canvas.selectedShape.points[3].y() - self.canvas.selectedShape.points[0].y())
+            
+            self.tracker.init(self.cv_img, bbox)
+            self.tracker_state = 'init'
+
+        elif(self.tracker_state == 'uninit'):
+            bbox = (self.canvas.selectedShape.points[0].x(),
+                    self.canvas.selectedShape.points[0].y(),
+                    self.canvas.selectedShape.points[1].x() - self.canvas.selectedShape.points[0].x(),
+                    self.canvas.selectedShape.points[3].y() - self.canvas.selectedShape.points[0].y())
+            self.tracker.init(self.cv_img, bbox)
+            self.tracker_state = 'init'
+            # print(bbox)
+            # print(self.canvas.selectedShape.points[0])
+
+
+        self.openNextImg(_value, keepCanvas=True)
+
+
+        if not self.tracker_state  == 'reinit':
+
+            new_points = []
+
+            point0 = []
+            point0.append(self.tracker_bbox[0])
+            point0.append(self.tracker_bbox[1])
+            new_points.append(point0)
+            
+            point1 = []
+            point1.append(self.tracker_bbox[0]+ self.tracker_bbox[2])
+            point1.append(self.tracker_bbox[1])
+            new_points.append(point1)
+
+            point2 = []
+            point2.append(self.tracker_bbox[0] + self.tracker_bbox[2])
+            point2.append(self.tracker_bbox[1] + self.tracker_bbox[3])
+            new_points.append(point2)
+
+            point3 = []
+            point3.append(self.tracker_bbox[0])
+            point3.append(self.tracker_bbox[1] + self.tracker_bbox[3])
+            new_points.append(point3)
+
+            print(new_points)
+
+            
+
+            if (len(last_shapes)>0):
+                last_shapes[0].setPoints(new_points)
+                self.canvas.shapes = last_shapes
+                self.addLabel(last_shapes[0])
+
+        ## TODO CREATE NEW SHAPE WITH PREEDICTED BBOX AND DRAW
+        # if(len(self.labelList) > 0):
+        #     predicted_shape = Shape( label=self.labelList[-1])
+        # else:
+        #     predicted_shape = Shape( label="tracked")
+        
+        # self.canvas.loadShapes(predicted_shape)
+        self.canvas.update()
+        
 
     def openFile(self, _value=False):
         if not self.mayContinue():

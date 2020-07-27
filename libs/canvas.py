@@ -569,6 +569,8 @@ class Canvas(QWidget):
 
     def keyPressEvent(self, ev):
         key = ev.key()
+        mod = ev.modifiers()
+
         if key == Qt.Key_Escape and self.current:
             print('ESC press')
             self.current = None
@@ -576,6 +578,33 @@ class Canvas(QWidget):
             self.update()
         elif key == Qt.Key_Return and self.canCloseShape():
             self.finalise()
+        elif key == Qt.Key_Left and self.selectedShape and (mod & Qt.ShiftModifier) and (mod & Qt.ControlModifier):
+            self.contractXPix('Left', 5)
+        elif key == Qt.Key_Right and self.selectedShape and (mod & Qt.ShiftModifier) and (mod & Qt.ControlModifier):
+            self.contractXPix('Right', 5)
+        elif key == Qt.Key_Up and self.selectedShape and (mod & Qt.ShiftModifier) and (mod & Qt.ControlModifier):
+            self.contractXPix('Up', 5)
+        elif key == Qt.Key_Down and self.selectedShape and (mod & Qt.ShiftModifier) and (mod & Qt.ControlModifier):
+            self.contractXPix('Down', 5)
+        
+        elif key == Qt.Key_Left and self.selectedShape and mod == Qt.ShiftModifier:
+            self.expandXPix('Left', 5)
+        elif key == Qt.Key_Right and self.selectedShape and mod == Qt.ShiftModifier:
+            self.expandXPix('Right', 5)
+        elif key == Qt.Key_Up and self.selectedShape and mod == Qt.ShiftModifier:
+            self.expandXPix('Up', 5)
+        elif key == Qt.Key_Down and self.selectedShape and mod == Qt.ShiftModifier:
+            self.expandXPix('Down', 5)
+
+        elif key == Qt.Key_Left and self.selectedShape and mod == Qt.ControlModifier:
+            self.moveXPixel('Left',10.0)
+        elif key == Qt.Key_Right and self.selectedShape and mod == Qt.ControlModifier:
+            self.moveXPixel('Right',10.0)
+        elif key == Qt.Key_Up and self.selectedShape and mod == Qt.ControlModifier:
+            self.moveXPixel('Up',10.0)
+        elif key == Qt.Key_Down and self.selectedShape and mod == Qt.ControlModifier:
+            self.moveXPixel('Down',10.0)
+
         elif key == Qt.Key_Left and self.selectedShape:
             self.moveOnePixel('Left')
         elif key == Qt.Key_Right and self.selectedShape:
@@ -611,6 +640,94 @@ class Canvas(QWidget):
             self.selectedShape.points[1] += QPointF(0, 1.0)
             self.selectedShape.points[2] += QPointF(0, 1.0)
             self.selectedShape.points[3] += QPointF(0, 1.0)
+        self.shapeMoved.emit()
+        self.repaint()
+
+    def moveXPixel(self, direction, x=1.0):
+        # print(self.selectedShape.points)
+        if direction == 'Left' and not self.moveOutOfBound(QPointF(-x, 0)):
+            # print("move Left one pixel")
+            self.selectedShape.points[0] += QPointF(-x, 0)
+            self.selectedShape.points[1] += QPointF(-x, 0)
+            self.selectedShape.points[2] += QPointF(-x, 0)
+            self.selectedShape.points[3] += QPointF(-x, 0)
+        elif direction == 'Right' and not self.moveOutOfBound(QPointF(x, 0)):
+            # print("move Right one pixel")
+            self.selectedShape.points[0] += QPointF(x, 0)
+            self.selectedShape.points[1] += QPointF(x, 0)
+            self.selectedShape.points[2] += QPointF(x, 0)
+            self.selectedShape.points[3] += QPointF(x, 0)
+        elif direction == 'Up' and not self.moveOutOfBound(QPointF(0, -x)):
+            # print("move Up one pixel")
+            self.selectedShape.points[0] += QPointF(0, -x)
+            self.selectedShape.points[1] += QPointF(0, -x)
+            self.selectedShape.points[2] += QPointF(0, -x)
+            self.selectedShape.points[3] += QPointF(0, -x)
+        elif direction == 'Down' and not self.moveOutOfBound(QPointF(0, x)):
+            # print("move Down one pixel")
+            self.selectedShape.points[0] += QPointF(0, x)
+            self.selectedShape.points[1] += QPointF(0, x)
+            self.selectedShape.points[2] += QPointF(0, x)
+            self.selectedShape.points[3] += QPointF(0, x)
+        self.shapeMoved.emit()
+        self.repaint()
+
+
+    def expandXPix(self, direction, x=1.0):
+        # print(self.selectedShape.points)
+        if direction == 'Left' and not self.moveOutOfBound(QPointF(-x, 0)):
+            # print("move Left one pixel")
+            self.selectedShape.points[0] += QPointF(-x, 0)
+            self.selectedShape.points[1] += QPointF( 0, 0)
+            self.selectedShape.points[2] += QPointF( 0, 0)
+            self.selectedShape.points[3] += QPointF(-x, 0)
+        elif direction == 'Right' and not self.moveOutOfBound(QPointF(x, 0)):
+            # print("move Right one pixel")
+            self.selectedShape.points[0] += QPointF(0, 0)
+            self.selectedShape.points[1] += QPointF(x, 0)
+            self.selectedShape.points[2] += QPointF(x, 0)
+            self.selectedShape.points[3] += QPointF(0, 0)
+        elif direction == 'Up' and not self.moveOutOfBound(QPointF(0, -x)):
+            # print("move Up one pixel")
+            self.selectedShape.points[0] += QPointF(0, -x)
+            self.selectedShape.points[1] += QPointF(0, -x)
+            self.selectedShape.points[2] += QPointF(0,  0)
+            self.selectedShape.points[3] += QPointF(0,  0)
+        elif direction == 'Down' and not self.moveOutOfBound(QPointF(0, x)):
+            # print("move Down one pixel")
+            self.selectedShape.points[0] += QPointF(0, 0)
+            self.selectedShape.points[1] += QPointF(0, 0)
+            self.selectedShape.points[2] += QPointF(0, x)
+            self.selectedShape.points[3] += QPointF(0, x)
+        self.shapeMoved.emit()
+        self.repaint()
+
+    def contractXPix(self, direction, x=1.0):
+        # print(self.selectedShape.points)
+        if direction == 'Left' and not self.moveOutOfBound(QPointF(-x, 0)):
+            # print("move Left one pixel")
+            self.selectedShape.points[0] += QPointF( 0, 0)
+            self.selectedShape.points[1] += QPointF(-x, 0)
+            self.selectedShape.points[2] += QPointF(-x, 0)
+            self.selectedShape.points[3] += QPointF( 0, 0)
+        elif direction == 'Right' and not self.moveOutOfBound(QPointF(x, 0)):
+            # print("move Right one pixel")
+            self.selectedShape.points[0] += QPointF(x, 0)
+            self.selectedShape.points[1] += QPointF(0, 0)
+            self.selectedShape.points[2] += QPointF(0, 0)
+            self.selectedShape.points[3] += QPointF(x, 0)
+        elif direction == 'Up' and not self.moveOutOfBound(QPointF(0, -x)):
+            # print("move Up one pixel")
+            self.selectedShape.points[0] += QPointF(0,  0)
+            self.selectedShape.points[1] += QPointF(0,  0)
+            self.selectedShape.points[2] += QPointF(0, -x)
+            self.selectedShape.points[3] += QPointF(0, -x)
+        elif direction == 'Down' and not self.moveOutOfBound(QPointF(0, x)):
+            # print("move Down one pixel")
+            self.selectedShape.points[0] += QPointF(0, x)
+            self.selectedShape.points[1] += QPointF(0, x)
+            self.selectedShape.points[2] += QPointF(0, 0)
+            self.selectedShape.points[3] += QPointF(0, 0)
         self.shapeMoved.emit()
         self.repaint()
 

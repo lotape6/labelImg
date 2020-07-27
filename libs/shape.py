@@ -64,6 +64,12 @@ class Shape(object):
     def close(self):
         self._closed = True
 
+    def setPoints(self, points):
+        self.points = []
+
+        for p in points:
+            self.points.append(QPointF(p[0],p[1]))
+
     def reachMaxPoints(self):
         if len(self.points) >= 4:
             return True
