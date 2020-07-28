@@ -1082,7 +1082,7 @@ class MainWindow(QMainWindow, WindowMixin):
 
                 if not ok:
                     self.tracker_state = 'reinit'
-                    
+                    print("Tracker lost! Reinitializing")
                 else:
                     self.tracker_bbox = bbox
                     print(bbox)
@@ -1310,9 +1310,10 @@ class MainWindow(QMainWindow, WindowMixin):
         if currIndex - 1 >= 0:
             filename = self.mImgList[currIndex - 1]
             if filename:
+                self.tracker_state = "pause"
                 self.loadFile(filename)
 
-    def openNextImg(self, _value=False, keepCanvas=False):
+    def openNextImg(self, _value=False, keepCanvas=False, tracking=False):
         # Proceding prev image without dialog if having any label
         if self.autoSaving.isChecked():
             if self.defaultSaveDir is not None:
@@ -1337,39 +1338,55 @@ class MainWindow(QMainWindow, WindowMixin):
                 filename = self.mImgList[currIndex + 1]
 
         if filename:
+            if (not tracking):
+                self.tracker_state = "pause"
             self.loadFile(filename, keepCanvas)
 
     def trackNextImg(self, _value=False):
         # Proceding prev image without dialog if having any label
 
         last_shapes = self.canvas.shapes
+
+        if(self.tracker_state == 'pause'):
+            self.tracker_state = 'reinit'
         
         if(self.tracker_state == 'reinit'):
             del self.tracker
-            self.tracker = cv2.TrackerBoosting_create()
-            bbox = (self.canvas.selectedShape.points[0].x(),
-                    self.canvas.selectedShape.points[0].y(),
-                    self.canvas.selectedShape.points[1].x() - self.canvas.selectedShape.points[0].x(),
-                    self.canvas.selectedShape.points[3].y() - self.canvas.selectedShape.points[0].y())
-            
-            self.tracker.init(self.cv_img, bbox)
-            self.tracker_state = 'init'
+            self.tracker = cv2.TrackerCSRT_create()
+            if (self.canvas.selectedShape):
+                bbox = (self.canvas.selectedShape.points[0].x(),
+                        self.canvas.selectedShape.points[0].y(),
+                        self.canvas.selectedShape.points[1].x() - self.canvas.selectedShape.points[0].x(),
+                        self.canvas.selectedShape.points[3].y() - self.canvas.selectedShape.points[0].y())
+                
+                self.tracker.init(self.cv_img, bbox)
+                self.tracker_state = 'init'
+
+            else:
+                self.tracker_state = 'uninit'
+                print("Unable to reinitialize tracker, bounding box not selected")
 
         elif(self.tracker_state == 'uninit'):
-            bbox = (self.canvas.selectedShape.points[0].x(),
-                    self.canvas.selectedShape.points[0].y(),
-                    self.canvas.selectedShape.points[1].x() - self.canvas.selectedShape.points[0].x(),
-                    self.canvas.selectedShape.points[3].y() - self.canvas.selectedShape.points[0].y())
-            self.tracker.init(self.cv_img, bbox)
-            self.tracker_state = 'init'
+            if (self.canvas.selectedShape):
+                bbox = (self.canvas.selectedShape.points[0].x(),
+                        self.canvas.selectedShape.points[0].y(),
+                        self.canvas.selectedShape.points[1].x() - self.canvas.selectedShape.points[0].x(),
+                        self.canvas.selectedShape.points[3].y() - self.canvas.selectedShape.points[0].y())
+                
+                self.tracker.init(self.cv_img, bbox)
+                self.tracker_state = 'init'
+
+            else:
+                self.tracker_state = 'uninit'
+                print("Unable to initialize tracker, bounding box not selected")
             # print(bbox)
             # print(self.canvas.selectedShape.points[0])
 
 
-        self.openNextImg(_value)
+        self.openNextImg(_value, tracking=True)
 
 
-        if not self.tracker_state  == 'reinit':
+        if (not (self.tracker_state  == 'reinit')) and (self.tracker_bbox):
 
             new_points = []
 
@@ -1404,6 +1421,9 @@ class MainWindow(QMainWindow, WindowMixin):
 
             self.canvas.shapeMoved.emit()
 
+
+        else: 
+            print("Error, no bbox calculated with the tracker")
 
         ## TODO CREATE NEW SHAPE WITH PREEDICTED BBOX AND DRAW
         # if(len(self.labelList) > 0):
