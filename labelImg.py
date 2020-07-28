@@ -99,7 +99,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.lastOpenDir = None
 
 
-        self.tracker = cv2.TrackerBoosting_create()
+        self.tracker = cv2.TrackerCSRT_create()
 
         self.tracker_state = 'uninit'
 
@@ -1366,7 +1366,7 @@ class MainWindow(QMainWindow, WindowMixin):
             # print(self.canvas.selectedShape.points[0])
 
 
-        self.openNextImg(_value, keepCanvas=True)
+        self.openNextImg(_value)
 
 
         if not self.tracker_state  == 'reinit':
@@ -1401,6 +1401,9 @@ class MainWindow(QMainWindow, WindowMixin):
                 last_shapes[0].setPoints(new_points)
                 self.canvas.shapes = last_shapes
                 self.addLabel(last_shapes[0])
+
+            self.canvas.shapeMoved.emit()
+
 
         ## TODO CREATE NEW SHAPE WITH PREEDICTED BBOX AND DRAW
         # if(len(self.labelList) > 0):
