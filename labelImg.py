@@ -1354,10 +1354,11 @@ class MainWindow(QMainWindow, WindowMixin):
             del self.tracker
             self.tracker = cv2.TrackerCSRT_create()
             if (self.canvas.selectedShape):
-                bbox = (self.canvas.selectedShape.points[0].x(),
-                        self.canvas.selectedShape.points[0].y(),
-                        self.canvas.selectedShape.points[1].x() - self.canvas.selectedShape.points[0].x(),
-                        self.canvas.selectedShape.points[3].y() - self.canvas.selectedShape.points[0].y())
+                # print(type(self.canvas.selectedShape.points[0].x()))
+                bbox = (int(self.canvas.selectedShape.points[0].x()),
+                        int(self.canvas.selectedShape.points[0].y()),
+                        int(self.canvas.selectedShape.points[1].x() - self.canvas.selectedShape.points[0].x()),
+                        int(self.canvas.selectedShape.points[3].y() - self.canvas.selectedShape.points[0].y()))
                 
                 self.tracker.init(self.cv_img, bbox)
                 self.tracker_state = 'init'
